@@ -643,8 +643,26 @@ class MainWindow(QMainWindow):
             if file_path:
                 try:
                     if export_type == "employees":
-                        employees = EmployeeRepository.get_all_employees()
-                        ExcelExporter.export_employee_list(employees, file_path)
+                        employees = EmployeeRepository.get_all()
+                        # Convert Employee objects to dictionaries
+                        employees_data = [
+                            {
+                                'employee_id': emp.employee_id,
+                                'last_name': emp.last_name,
+                                'first_name': emp.first_name,
+                                'position': emp.position,
+                                'category': emp.category,
+                                'status_code': emp.status_code,
+                                'hire_date': emp.hire_date,
+                                'agency_code': emp.agency_code,
+                                'department_code': emp.department_code,
+                                'inps_number': emp.inps_number,
+                                'bank_name': emp.bank_name,
+                                'account_number': emp.account_number
+                            }
+                            for emp in employees
+                        ]
+                        ExcelExporter.export_employee_list(employees_data, file_path)
                     elif export_type in ["payroll", "all_payroll"]:
                         periods = PayrollRepository.get_all_periods()
                         if periods:
