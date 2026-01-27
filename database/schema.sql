@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS loans_advances (
     end_date DATE,                                 -- Date Fin
     duration_months INTEGER,                       -- Durée
     monthly_payment REAL,                          -- Mensualité
+    notes TEXT,                                    -- Notes/commentaires
     is_active BOOLEAN DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -151,7 +152,7 @@ CREATE INDEX idx_loans_active ON loans_advances(is_active);
 CREATE TABLE IF NOT EXISTS loan_payments (
     payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
     loan_id INTEGER NOT NULL,
-    period_id INTEGER NOT NULL,
+    period_id INTEGER,                             -- NULL until linked to payroll period
     payment_date DATE NOT NULL,
     scheduled_amount REAL NOT NULL,
     actual_amount REAL DEFAULT 0,
@@ -159,8 +160,7 @@ CREATE TABLE IF NOT EXISTS loan_payments (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (loan_id) REFERENCES loans_advances(loan_id),
-    FOREIGN KEY (period_id) REFERENCES payroll_periods(period_id),
-    UNIQUE(loan_id, period_id)
+    FOREIGN KEY (period_id) REFERENCES payroll_periods(period_id)
 );
 
 CREATE INDEX idx_payments_loan ON loan_payments(loan_id);

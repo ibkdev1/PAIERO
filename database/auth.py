@@ -86,23 +86,29 @@ class AuthManager:
         try:
             conn = DatabaseConnection.get_connection()
 
-            # Get user from database
+            # Normalize username (strip and lowercase for comparison)
+            username_normalized = username.strip()
+
+            # Get user from database (case-insensitive search)
             cursor = conn.execute("""
                 SELECT user_id, username, password_hash, full_name, role, is_active
                 FROM users
-                WHERE username = ?
-            """, (username,))
+                WHERE LOWER(username) = LOWER(?)
+            """, (username_normalized,))
 
             user = cursor.fetchone()
 
             if not user:
+                print(f"Login failed: User '{username_normalized}' not found")
                 return False, "Nom d'utilisateur ou mot de passe incorrect"
 
             if not user['is_active']:
+                print(f"Login failed: User '{username_normalized}' is inactive")
                 return False, "Ce compte est désactivé. Contactez l'administrateur."
 
             # Verify password
             if not cls.verify_password(password, user['password_hash']):
+                print(f"Login failed: Invalid password for user '{username_normalized}'")
                 return False, "Nom d'utilisateur ou mot de passe incorrect"
 
             # Update last login
@@ -121,9 +127,13 @@ class AuthManager:
                 'role': user['role']
             }
 
+            print(f"Login successful for user '{user['username']}'")
             return True, None
 
         except Exception as e:
+            print(f"Login error: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, f"Erreur de connexion: {str(e)}"
 
     @classmethod
@@ -167,8 +177,12 @@ class AuthManager:
         try:
             conn = DatabaseConnection.get_connection()
 
-            # Check if username already exists
-            cursor = conn.execute("SELECT username FROM users WHERE username = ?", (username,))
+            # Normalize username (strip whitespace)
+            username_normalized = username.strip()
+            full_name_normalized = full_name.strip()
+
+            # Check if username already exists (case-insensitive)
+            cursor = conn.execute("SELECT username FROM users WHERE LOWER(username) = LOWER(?)", (username_normalized,))
             if cursor.fetchone():
                 return False, "Ce nom d'utilisateur existe déjà"
 
@@ -179,7 +193,7 @@ class AuthManager:
             cursor = conn.execute("""
                 INSERT INTO users (username, password_hash, full_name, role, is_active)
                 VALUES (?, ?, ?, ?, 1)
-            """, (username, password_hash, full_name, role))
+            """, (username_normalized, password_hash, full_name_normalized, role))
             conn.commit()
 
             # Get the new user ID
@@ -188,9 +202,13 @@ class AuthManager:
             # Create default permissions
             cls.create_default_permissions(new_user_id, is_admin=(role == 'admin'))
 
+            print(f"User '{username_normalized}' created successfully with ID {new_user_id}")
             return True, None
 
         except Exception as e:
+            print(f"Error creating user: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return False, f"Erreur lors de la création: {str(e)}"
 
     @classmethod

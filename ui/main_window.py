@@ -440,6 +440,8 @@ class MainWindow(QMainWindow):
         self.content_stack.setCurrentWidget(self.reports_screen)
         self.set_active_nav_button("reports")
         self.status_label.setText("Rapports")
+        # Refresh report screen data when shown
+        self.reports_screen.refresh_data()
 
     def show_parameters(self):
         """Show parameters screen"""
@@ -646,7 +648,7 @@ class MainWindow(QMainWindow):
                     elif export_type in ["payroll", "all_payroll"]:
                         periods = PayrollRepository.get_all_periods()
                         if periods:
-                            records = PayrollRepository.get_period_records(periods[0]['period_id'])
+                            records = PayrollRepository.get_records_by_period(periods[0]['period_id'])
                             ExcelExporter.export_payroll_period(records, periods[0], file_path)
 
                     QMessageBox.information(

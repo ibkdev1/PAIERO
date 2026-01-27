@@ -140,10 +140,15 @@ class ReportScreen(QWidget):
                 for period in periods:
                     start = period['period_start_date']
                     end = period['period_end_date']
-                    label = f"{start} au {end}"
+                    finalized = " [Finalisée]" if period.get('is_finalized') else ""
+                    label = f"{start} au {end}{finalized}"
                     self.period_combo.addItem(label, period['period_id'])
-        except:
-            pass
+        except Exception as e:
+            print(f"Error loading periods: {e}")
+
+    def refresh_data(self):
+        """Refresh the report screen data"""
+        self.load_periods()
 
     def create_report_card(self, title, description, color, callback):
         """Create a simple report card"""

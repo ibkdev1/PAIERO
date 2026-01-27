@@ -93,6 +93,28 @@ class DatabaseConnection:
                 AuthManager.create_default_admin()
             else:
                 raise FileNotFoundError(f"Schema file not found: {schema_path}")
+        else:
+            # Database exists, run migrations for any missing columns
+            self._run_migrations()
+
+    def _run_migrations(self):
+        """Run database migrations to add any missing columns"""
+        cursor = self._connection.cursor()
+
+        # Migration 1: Add 'notes' column to loans_advances if it doesn't exist
+        cursor.execute("PRAGMA table_info(loans_advances)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'notes' not in columns:
+            try:
+                cursor.execute("ALTER TABLE loans_advances ADD COLUMN notes TEXT")
+                self._connection.commit()
+                print("Migration: Added 'notes' column to loans_advances")
+            except Exception as e:
+                print(f"Migration warning: {e}")
+
+        # Migration 2: Check if loan_payments.period_id allows NULL
+        # SQLite doesn't allow changing column constraints, so we need to recreate
+        # For now, just ensure the table works by catching errors in the repository
 
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:
