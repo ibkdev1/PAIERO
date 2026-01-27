@@ -32,7 +32,14 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_screen = None
-        self.init_ui()
+        self.user_management_screen = None  # Initialize to None for non-admin users
+        try:
+            self.init_ui()
+        except Exception as e:
+            print(f"ERROR in MainWindow.init_ui: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def init_ui(self):
         """Initialize the user interface"""

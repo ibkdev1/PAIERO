@@ -69,10 +69,19 @@ def main():
     print("Login successful!")
 
     # Create and show main window
-    window = MainWindow()
-    window.show()
-
-    print(f"{APP_TITLE} started successfully!")
+    try:
+        print("Creating main window...")
+        window = MainWindow()
+        print("Showing main window...")
+        window.show()
+        print(f"{APP_TITLE} started successfully!")
+    except Exception as e:
+        print(f"ERROR creating main window: {e}")
+        import traceback
+        traceback.print_exc()
+        from PyQt6.QtWidgets import QMessageBox
+        QMessageBox.critical(None, "Erreur", f"Erreur lors du démarrage:\n{e}")
+        return 1
     print("=" * 60)
     print()
 
