@@ -210,25 +210,40 @@ class DashboardScreen(QWidget):
             else:
                 self.period_card.value_label.setText("Aucune")
 
-            # Get payroll statistics - net to pay from most recent period with data
+            # Get payroll statistics - net to pay from most recent FINALIZED period
+            # First try finalized periods, then fall back to any period with data
             cursor = conn.execute("""
-                SELECT SUM(pr.net_to_pay) as total_net
+                SELECT SUM(pr.net_to_pay) as total_net, pp.period_start_date
                 FROM payroll_records pr
-                WHERE pr.period_id = (
-                    SELECT pr2.period_id
-                    FROM payroll_records pr2
-                    JOIN payroll_periods pp ON pr2.period_id = pp.period_id
-                    ORDER BY pp.period_start_date DESC
-                    LIMIT 1
-                )
+                JOIN payroll_periods pp ON pr.period_id = pp.period_id
+                WHERE pp.is_finalized = 1
+                GROUP BY pr.period_id
+                ORDER BY pp.period_start_date DESC
+                LIMIT 1
             """)
             stats = cursor.fetchone()
 
+            # If no finalized periods, try any period with calculated payroll
+            if not stats or not stats['total_net']:
+                cursor = conn.execute("""
+                    SELECT SUM(pr.net_to_pay) as total_net, pp.period_start_date
+                    FROM payroll_records pr
+                    JOIN payroll_periods pp ON pr.period_id = pp.period_id
+                    WHERE pr.net_to_pay > 0
+                    GROUP BY pr.period_id
+                    ORDER BY pp.period_start_date DESC
+                    LIMIT 1
+                """)
+                stats = cursor.fetchone()
+
             if stats and stats['total_net'] and stats['total_net'] > 0:
                 # Format with thousands separators and CFA
-                self.net_card.value_label.setText(f"{int(stats['total_net']):,} CFA")
+                total = int(stats['total_net'])
+                self.net_card.value_label.setText(f"{total:,} CFA")
+                print(f"Dashboard: Net à payer = {total:,} CFA from period {stats['period_start_date']}")
             else:
                 self.net_card.value_label.setText("0 CFA")
+                print("Dashboard: No payroll data found with net_to_pay > 0")
 
             # Success - data loaded
             print(f"Dashboard data loaded successfully: {employee_count} employees")
