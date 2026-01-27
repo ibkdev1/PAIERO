@@ -33,8 +33,7 @@ jobs:
         shell: cmd
         run: |
           mkdir dist\PAIERO-Windows
-          copy dist\PAIERO.exe dist\PAIERO-Windows\
-          if exist dist\_internal xcopy dist\_internal dist\PAIERO-Windows\_internal\ /E /I /Q
+          xcopy dist\PAIERO dist\PAIERO-Windows\PAIERO\ /E /I /Q
           copy installer\install_windows.bat dist\PAIERO-Windows\
           copy installer\uninstall_windows.bat dist\PAIERO-Windows\
           copy installer\README_INSTALL.txt dist\PAIERO-Windows\

@@ -62,24 +62,31 @@ pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='PAIERO',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=True,  # Strip debug symbols to reduce size
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,  # No console window
+    strip=False,
+    upx=False,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
     icon=None,
+)
+
+# Collect all binaries and data into a folder
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    name='PAIERO',
 )
 
 # macOS app bundle

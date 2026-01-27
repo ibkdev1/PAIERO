@@ -7,6 +7,7 @@ REM ========================================
 setlocal enabledelayedexpansion
 
 set APP_NAME=PAIERO
+set APP_FOLDER=PAIERO
 set APP_FILE=PAIERO.exe
 set INSTALL_DIR=%LOCALAPPDATA%\PAIERO
 set DESKTOP=%USERPROFILE%\Desktop
@@ -17,14 +18,24 @@ echo   PAIERO Installer for Windows
 echo ========================================
 echo.
 
-REM Check if running from correct directory
-if not exist "%APP_FILE%" (
-    echo Error: %APP_FILE% not found in current directory.
-    echo Please run this installer from the folder containing PAIERO.exe
-    pause
-    exit /b 1
+REM Check if running from correct directory (folder-based structure)
+if exist "%APP_FOLDER%\%APP_FILE%" (
+    set SOURCE_DIR=%APP_FOLDER%
+    goto :install
 )
 
+REM Fallback: single exe mode
+if exist "%APP_FILE%" (
+    set SOURCE_DIR=.
+    goto :install
+)
+
+echo Error: PAIERO not found in current directory.
+echo Please run this installer from the extracted folder.
+pause
+exit /b 1
+
+:install
 REM Check if already installed
 if exist "%INSTALL_DIR%\%APP_FILE%" (
     echo PAIERO is already installed.
@@ -44,9 +55,13 @@ mkdir "%INSTALL_DIR%" 2>nul
 
 REM Copy application files
 echo Installing PAIERO...
-copy "%APP_FILE%" "%INSTALL_DIR%\" >nul
-if exist "*.dll" copy "*.dll" "%INSTALL_DIR%\" >nul
-if exist "_internal" xcopy "_internal" "%INSTALL_DIR%\_internal\" /E /I /Q >nul
+if "%SOURCE_DIR%"=="PAIERO" (
+    xcopy "%SOURCE_DIR%" "%INSTALL_DIR%\" /E /I /Q >nul
+) else (
+    copy "%APP_FILE%" "%INSTALL_DIR%\" >nul
+    if exist "*.dll" copy "*.dll" "%INSTALL_DIR%\" >nul
+    if exist "_internal" xcopy "_internal" "%INSTALL_DIR%\_internal\" /E /I /Q >nul
+)
 
 REM Create desktop shortcut
 echo Creating desktop shortcut...
