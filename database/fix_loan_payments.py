@@ -51,9 +51,6 @@ def fix_loan_payments_table(db_path: str):
         shutil.copy2(db_path, backup_path)
         print(f"✓ Backup created: {backup_path}")
 
-        # Begin transaction
-        cursor.execute("BEGIN TRANSACTION")
-
         # Create new table with correct schema
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS loan_payments_new (

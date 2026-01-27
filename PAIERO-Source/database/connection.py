@@ -127,7 +127,6 @@ class DatabaseConnection:
             # Need to recreate table with nullable period_id
             try:
                 print("Migration: Fixing loan_payments.period_id constraint...")
-                cursor.execute("BEGIN TRANSACTION")
 
                 # Create new table with correct schema
                 cursor.execute("""
