@@ -30,6 +30,7 @@ jobs:
           pyinstaller --clean --noconfirm PAIERO.spec
 
       - name: Create Windows package
+        shell: cmd
         run: |
           mkdir dist\PAIERO-Windows
           copy dist\PAIERO.exe dist\PAIERO-Windows\
