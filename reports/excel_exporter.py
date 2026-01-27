@@ -241,3 +241,99 @@ class ExcelExporter:
 
         wb.save(output_path)
         return output_path
+
+    @staticmethod
+    def export_employee_list(employees, output_path):
+        """
+        Export employee list to Excel
+
+        Args:
+            employees: List of employee records
+            output_path: Path to save Excel file
+
+        Returns:
+            str: Path to generated Excel file
+        """
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Employés"
+
+        # Header styling
+        header_fill = PatternFill(start_color="2C3E50", end_color="2C3E50", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True, size=11)
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+        # Border
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # Title
+        ws.merge_cells('A1:L1')
+        title_cell = ws['A1']
+        title_cell.value = f"LISTE DES EMPLOYÉS - Exporté le {datetime.now().strftime('%d/%m/%Y %H:%M')}"
+        title_cell.font = Font(size=14, bold=True)
+        title_cell.alignment = Alignment(horizontal="center", vertical="center")
+        title_cell.fill = PatternFill(start_color="3498DB", end_color="3498DB", fill_type="solid")
+
+        ws.row_dimensions[1].height = 30
+        ws.row_dimensions[3].height = 25
+
+        # Headers
+        headers = [
+            "N° Matricule", "Nom", "Prénom", "Fonction", "Catégorie",
+            "Statut", "Date Embauche", "Agence", "Département",
+            "N° INPS", "Banque", "N° Compte"
+        ]
+
+        for col_num, header in enumerate(headers, 1):
+            cell = ws.cell(row=3, column=col_num)
+            cell.value = header
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # Data rows
+        row_num = 4
+        for emp in employees:
+            ws.cell(row=row_num, column=1, value=emp.get('employee_id', '')).border = thin_border
+            ws.cell(row=row_num, column=2, value=emp.get('last_name', '')).border = thin_border
+            ws.cell(row=row_num, column=3, value=emp.get('first_name', '')).border = thin_border
+            ws.cell(row=row_num, column=4, value=emp.get('position', '')).border = thin_border
+            ws.cell(row=row_num, column=5, value=emp.get('category', '')).border = thin_border
+            ws.cell(row=row_num, column=6, value=emp.get('status_code', '')).border = thin_border
+            ws.cell(row=row_num, column=7, value=emp.get('hire_date', '')).border = thin_border
+            ws.cell(row=row_num, column=8, value=emp.get('agency_code', '')).border = thin_border
+            ws.cell(row=row_num, column=9, value=emp.get('department_code', '')).border = thin_border
+            ws.cell(row=row_num, column=10, value=emp.get('inps_number', '')).border = thin_border
+            ws.cell(row=row_num, column=11, value=emp.get('bank_name', '')).border = thin_border
+            ws.cell(row=row_num, column=12, value=emp.get('account_number', '')).border = thin_border
+
+            # Alternate row colors
+            if row_num % 2 == 0:
+                for c in range(1, 13):
+                    ws.cell(row=row_num, column=c).fill = PatternFill(
+                        start_color="ECF0F1", end_color="ECF0F1", fill_type="solid"
+                    )
+
+            row_num += 1
+
+        # Summary row
+        summary_row = row_num + 1
+        ws.cell(row=summary_row, column=1, value=f"Total: {len(employees)} employés").font = Font(bold=True)
+
+        # Column widths
+        col_widths = [12, 15, 15, 20, 12, 10, 12, 10, 12, 15, 15, 20]
+        for i, width in enumerate(col_widths, 1):
+            ws.column_dimensions[get_column_letter(i)].width = width
+
+        # Freeze panes
+        ws.freeze_panes = 'A4'
+
+        # Save
+        wb.save(output_path)
+        return output_path
