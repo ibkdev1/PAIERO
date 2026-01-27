@@ -15,6 +15,20 @@ class LoanRepository:
     """Repository for loan and advance operations"""
 
     @staticmethod
+    def _ensure_notes_column():
+        """Ensure the notes column exists in loans_advances table"""
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.execute("PRAGMA table_info(loans_advances)")
+        columns = [col[1] for col in cursor.fetchall()]
+        if 'notes' not in columns:
+            try:
+                conn.execute("ALTER TABLE loans_advances ADD COLUMN notes TEXT")
+                conn.commit()
+                print("Added 'notes' column to loans_advances table")
+            except Exception as e:
+                print(f"Could not add notes column: {e}")
+
+    @staticmethod
     def create_loan(employee_id: str, loan_type: str, total_amount: float,
                    grant_date: date, duration_months: int, notes: str = "") -> int:
         """
@@ -32,6 +46,9 @@ class LoanRepository:
             loan_id of created loan
         """
         conn = DatabaseConnection.get_connection()
+
+        # Ensure notes column exists (for older databases)
+        LoanRepository._ensure_notes_column()
 
         # Calculate monthly payment
         monthly_payment = total_amount / duration_months if duration_months > 0 else total_amount
