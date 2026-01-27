@@ -75,17 +75,64 @@ class LoanRepository:
         """Create payment schedule for a loan"""
         conn = DatabaseConnection.get_connection()
 
+        # Ensure loan_payments table has nullable period_id
+        LoanRepository._ensure_loan_payments_schema()
+
         # Start payments from the next month
         payment_date = grant_date + relativedelta(months=1)
 
         for month in range(duration_months):
             conn.execute("""
                 INSERT INTO loan_payments (
-                    loan_id, payment_date, scheduled_amount, is_paid
-                ) VALUES (?, ?, ?, 0)
+                    loan_id, period_id, payment_date, scheduled_amount, is_paid
+                ) VALUES (?, NULL, ?, ?, 0)
             """, (loan_id, payment_date, monthly_payment))
 
             payment_date += relativedelta(months=1)
+
+    @staticmethod
+    def _ensure_loan_payments_schema():
+        """Ensure loan_payments table allows NULL period_id"""
+        conn = DatabaseConnection.get_connection()
+        cursor = conn.cursor()
+
+        # Check if we need to recreate the table
+        cursor.execute("PRAGMA table_info(loan_payments)")
+        columns = cursor.fetchall()
+
+        # Find period_id column and check if it's NOT NULL
+        for col in columns:
+            if col[1] == 'period_id' and col[3] == 1:  # col[3] is notnull flag
+                # Need to recreate table with nullable period_id
+                try:
+                    cursor.execute("BEGIN TRANSACTION")
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS loan_payments_new (
+                            payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            loan_id INTEGER NOT NULL,
+                            period_id INTEGER,
+                            payment_date DATE NOT NULL,
+                            scheduled_amount REAL NOT NULL,
+                            actual_amount REAL DEFAULT 0,
+                            is_paid BOOLEAN DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (loan_id) REFERENCES loans_advances(loan_id),
+                            FOREIGN KEY (period_id) REFERENCES payroll_periods(period_id)
+                        )
+                    """)
+                    cursor.execute("""
+                        INSERT INTO loan_payments_new
+                        SELECT * FROM loan_payments
+                    """)
+                    cursor.execute("DROP TABLE loan_payments")
+                    cursor.execute("ALTER TABLE loan_payments_new RENAME TO loan_payments")
+                    conn.commit()
+                    print("Migration: Recreated loan_payments table with nullable period_id")
+                except Exception as e:
+                    conn.rollback()
+                    print(f"Migration warning (loan_payments): {e}")
+                break
 
     @staticmethod
     def get_all_loans(include_inactive: bool = False) -> List[Dict[str, Any]]:
