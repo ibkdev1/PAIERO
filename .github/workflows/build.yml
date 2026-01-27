@@ -1,0 +1,116 @@
+name: Build PAIERO
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - 'v*'
+  workflow_dispatch:  # Allows manual trigger
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build Windows executable
+        run: |
+          pyinstaller --clean --noconfirm PAIERO.spec
+
+      - name: Create Windows package
+        run: |
+          mkdir dist\PAIERO-Windows
+          copy dist\PAIERO.exe dist\PAIERO-Windows\
+          if exist dist\_internal xcopy dist\_internal dist\PAIERO-Windows\_internal\ /E /I /Q
+          copy installer\install_windows.bat dist\PAIERO-Windows\
+          copy installer\uninstall_windows.bat dist\PAIERO-Windows\
+          copy installer\README_INSTALL.txt dist\PAIERO-Windows\
+
+      - name: Zip Windows package
+        run: |
+          cd dist
+          Compress-Archive -Path PAIERO-Windows -DestinationPath PAIERO-Windows-v1.0.0.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PAIERO-Windows
+          path: dist/PAIERO-Windows-v1.0.0.zip
+
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build macOS app
+        run: |
+          pyinstaller --clean --noconfirm PAIERO.spec
+
+      - name: Create macOS package
+        run: |
+          mkdir -p dist/PAIERO-Mac
+          cp -R dist/PAIERO.app dist/PAIERO-Mac/
+          cp installer/install_mac.command dist/PAIERO-Mac/
+          cp installer/install_mac.sh dist/PAIERO-Mac/
+          cp installer/README_INSTALL.txt dist/PAIERO-Mac/
+          chmod +x dist/PAIERO-Mac/install_mac.command
+          chmod +x dist/PAIERO-Mac/install_mac.sh
+
+      - name: Zip macOS package
+        run: |
+          cd dist
+          zip -r PAIERO-Mac-v1.0.0.zip PAIERO-Mac
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PAIERO-Mac
+          path: dist/PAIERO-Mac-v1.0.0.zip
+
+  release:
+    needs: [build-windows, build-macos]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PAIERO-Windows
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PAIERO-Mac
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            PAIERO-Windows-v1.0.0.zip
+            PAIERO-Mac-v1.0.0.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
