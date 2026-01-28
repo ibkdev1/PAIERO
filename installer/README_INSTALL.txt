@@ -3,7 +3,7 @@
         Professional Payroll Management System
 ================================================================
 
-Thank you for downloading PAIERO!
+Thank you for downloading PAIERO! Test
 
 ================================================================
                     QUICK START

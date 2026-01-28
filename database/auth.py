@@ -109,6 +109,8 @@ class AuthManager:
             # Verify password
             if not cls.verify_password(password, user['password_hash']):
                 print(f"Login failed: Invalid password for user '{username_normalized}'")
+                print(f"DEBUG: Password length: {len(password)}, Hash length: {len(user['password_hash'])}")
+                print(f"DEBUG: Password (repr): {repr(password)}")
                 return False, "Nom d'utilisateur ou mot de passe incorrect"
 
             # Update last login
@@ -188,6 +190,9 @@ class AuthManager:
 
             # Hash password
             password_hash = cls.hash_password(password)
+            print(f"DEBUG: Creating user with password length: {len(password)}")
+            print(f"DEBUG: Password (repr): {repr(password)}")
+            print(f"DEBUG: Generated hash length: {len(password_hash)}")
 
             # Insert user
             cursor = conn.execute("""
