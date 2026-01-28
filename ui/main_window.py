@@ -122,14 +122,43 @@ class MainWindow(QMainWindow):
         # Edit menu
         edit_menu = menubar.addMenu("Édition")
 
+        edit_employee_action = QAction("Employés...", self)
+        edit_employee_action.setShortcut("Ctrl+E")
+        edit_employee_action.triggered.connect(self.show_employees)
+        edit_menu.addAction(edit_employee_action)
+
+        edit_payroll_action = QAction("Paie...", self)
+        edit_payroll_action.setShortcut("Ctrl+P")
+        edit_payroll_action.triggered.connect(self.show_payroll)
+        edit_menu.addAction(edit_payroll_action)
+
+        edit_loans_action = QAction("Prêts/Avances...", self)
+        edit_loans_action.setShortcut("Ctrl+A")
+        edit_loans_action.triggered.connect(self.show_loans)
+        edit_menu.addAction(edit_loans_action)
+
+        edit_menu.addSeparator()
+
+        edit_parameters_action = QAction("Paramètres...", self)
+        edit_parameters_action.triggered.connect(self.show_parameters)
+        edit_menu.addAction(edit_parameters_action)
+
         # Reports menu
         reports_menu = menubar.addMenu("Rapports")
 
         salary_slip_action = QAction("Bulletin de Salaire...", self)
+        salary_slip_action.triggered.connect(self.generate_salary_slip)
         reports_menu.addAction(salary_slip_action)
 
         payroll_summary_action = QAction("Résumé de Paie...", self)
+        payroll_summary_action.triggered.connect(self.generate_payroll_summary)
         reports_menu.addAction(payroll_summary_action)
+
+        reports_menu.addSeparator()
+
+        all_reports_action = QAction("Tous les Rapports...", self)
+        all_reports_action.triggered.connect(self.show_reports)
+        reports_menu.addAction(all_reports_action)
 
         # Tools menu
         tools_menu = menubar.addMenu("Outils")
@@ -716,6 +745,28 @@ class MainWindow(QMainWindow):
                     self, "Erreur de sauvegarde",
                     f"Erreur lors de la sauvegarde: {str(e)}"
                 )
+
+    def generate_salary_slip(self):
+        """Generate salary slip for an employee"""
+        # Switch to reports screen and let user generate from there
+        self.show_reports()
+        QMessageBox.information(
+            self,
+            "Bulletin de Salaire",
+            "Utilisez l'écran Rapports pour générer des bulletins de salaire.\n\n"
+            "Vous pouvez sélectionner une période et un employé spécifique."
+        )
+
+    def generate_payroll_summary(self):
+        """Generate payroll summary report"""
+        # Switch to reports screen and let user generate from there
+        self.show_reports()
+        QMessageBox.information(
+            self,
+            "Résumé de Paie",
+            "Utilisez l'écran Rapports pour générer des résumés de paie.\n\n"
+            "Vous pouvez sélectionner une période et le type de rapport souhaité."
+        )
 
     def show_about(self):
         """Show about dialog"""

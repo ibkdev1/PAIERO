@@ -280,15 +280,30 @@ class ParameterScreen(QWidget):
 
     def manage_tax_brackets(self):
         """Manage tax brackets"""
+        # Check permissions
         if not AuthManager.has_permission('can_modify_parameters'):
-            QMessageBox.warning(self, "Permission refusée", "Vous n'avez pas la permission de modifier les paramètres système.")
+            QMessageBox.warning(
+                self,
+                "Permission refusée",
+                "Vous n'avez pas la permission de modifier les paramètres système.\n\n"
+                "Connectez-vous en tant qu'administrateur pour accéder à cette fonctionnalité."
+            )
             return
 
-        dialog = TaxBracketDialog(parent=self)
-        if dialog.exec() == QDialog.DialogCode.Accepted:
-            QMessageBox.information(
+        try:
+            dialog = TaxBracketDialog(parent=self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                QMessageBox.information(
+                    self,
+                    "Succès",
+                    "Les tranches d'imposition ont été mises à jour.\n\n"
+                    "Les nouveaux taux seront appliqués lors des prochains calculs de paie."
+                )
+        except Exception as e:
+            QMessageBox.critical(
                 self,
-                "Succès",
-                "Les tranches d'imposition ont été mises à jour.\n\n"
-                "Les nouveaux taux seront appliqués lors des prochains calculs de paie."
+                "Erreur",
+                f"Erreur lors de l'ouverture de la fenêtre de modification:\n{str(e)}"
             )
+            import traceback
+            traceback.print_exc()

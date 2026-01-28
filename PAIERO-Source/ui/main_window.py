@@ -5,13 +5,16 @@ Main Application Window
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QStackedWidget, QFrame, QMessageBox,
-    QStatusBar, QMenuBar, QMenu
+    QStatusBar, QMenuBar, QMenu, QFileDialog, QDialog,
+    QFormLayout, QDateEdit, QComboBox, QDialogButtonBox, QLineEdit
 )
-from PyQt6.QtCore import Qt, QSize
+from PyQt6.QtCore import Qt, QSize, QDate
 from PyQt6.QtGui import QAction, QFont
+import os
+from datetime import datetime, date
 
 from config import APP_TITLE, APP_VERSION, WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT, \
-    WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT
+    WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT, BACKUP_DIR, REPORTS_DIR
 from ui.screens.dashboard_screen import DashboardScreen
 from ui.screens.employee_screen import EmployeeScreen
 from ui.screens.payroll_screen import PayrollScreen
@@ -29,7 +32,14 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.current_screen = None
-        self.init_ui()
+        self.user_management_screen = None  # Initialize to None for non-admin users
+        try:
+            self.init_ui()
+        except Exception as e:
+            print(f"ERROR in MainWindow.init_ui: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
 
     def init_ui(self):
         """Initialize the user interface"""
@@ -112,14 +122,43 @@ class MainWindow(QMainWindow):
         # Edit menu
         edit_menu = menubar.addMenu("Édition")
 
+        edit_employee_action = QAction("Employés...", self)
+        edit_employee_action.setShortcut("Ctrl+E")
+        edit_employee_action.triggered.connect(self.show_employees)
+        edit_menu.addAction(edit_employee_action)
+
+        edit_payroll_action = QAction("Paie...", self)
+        edit_payroll_action.setShortcut("Ctrl+P")
+        edit_payroll_action.triggered.connect(self.show_payroll)
+        edit_menu.addAction(edit_payroll_action)
+
+        edit_loans_action = QAction("Prêts/Avances...", self)
+        edit_loans_action.setShortcut("Ctrl+A")
+        edit_loans_action.triggered.connect(self.show_loans)
+        edit_menu.addAction(edit_loans_action)
+
+        edit_menu.addSeparator()
+
+        edit_parameters_action = QAction("Paramètres...", self)
+        edit_parameters_action.triggered.connect(self.show_parameters)
+        edit_menu.addAction(edit_parameters_action)
+
         # Reports menu
         reports_menu = menubar.addMenu("Rapports")
 
         salary_slip_action = QAction("Bulletin de Salaire...", self)
+        salary_slip_action.triggered.connect(self.generate_salary_slip)
         reports_menu.addAction(salary_slip_action)
 
         payroll_summary_action = QAction("Résumé de Paie...", self)
+        payroll_summary_action.triggered.connect(self.generate_payroll_summary)
         reports_menu.addAction(payroll_summary_action)
+
+        reports_menu.addSeparator()
+
+        all_reports_action = QAction("Tous les Rapports...", self)
+        all_reports_action.triggered.connect(self.show_reports)
+        reports_menu.addAction(all_reports_action)
 
         # Tools menu
         tools_menu = menubar.addMenu("Outils")
@@ -437,6 +476,8 @@ class MainWindow(QMainWindow):
         self.content_stack.setCurrentWidget(self.reports_screen)
         self.set_active_nav_button("reports")
         self.status_label.setText("Rapports")
+        # Refresh report screen data when shown
+        self.reports_screen.refresh_data()
 
     def show_parameters(self):
         """Show parameters screen"""
@@ -486,19 +527,246 @@ class MainWindow(QMainWindow):
     # Menu actions
     def new_period(self):
         """Create a new payroll period"""
-        QMessageBox.information(self, "Nouvelle Période", "Cette fonctionnalité sera disponible prochainement.")
+        from database.repositories.payroll_repository import PayrollRepository
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Nouvelle Période de Paie")
+        dialog.setMinimumWidth(400)
+
+        layout = QVBoxLayout(dialog)
+        form_layout = QFormLayout()
+
+        # Month/Year selection
+        month_combo = QComboBox()
+        months = [
+            ("Janvier", 1), ("Février", 2), ("Mars", 3), ("Avril", 4),
+            ("Mai", 5), ("Juin", 6), ("Juillet", 7), ("Août", 8),
+            ("Septembre", 9), ("Octobre", 10), ("Novembre", 11), ("Décembre", 12)
+        ]
+        for name, num in months:
+            month_combo.addItem(name, num)
+        month_combo.setCurrentIndex(datetime.now().month - 1)
+        form_layout.addRow("Mois:", month_combo)
+
+        year_combo = QComboBox()
+        current_year = datetime.now().year
+        for year in range(current_year - 1, current_year + 2):
+            year_combo.addItem(str(year), year)
+        year_combo.setCurrentText(str(current_year))
+        form_layout.addRow("Année:", year_combo)
+
+        layout.addLayout(form_layout)
+
+        # Buttons
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            month = month_combo.currentData()
+            year = year_combo.currentData()
+
+            # Calculate start and end dates
+            import calendar
+            start_date = date(year, month, 1)
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = date(year, month, last_day)
+            period_name = f"{month_combo.currentText()} {year}"
+
+            try:
+                period_id = PayrollRepository.create_period(start_date, end_date, period_name)
+                if period_id:
+                    QMessageBox.information(
+                        self, "Succès",
+                        f"Période '{period_name}' créée avec succès!"
+                    )
+                    # Refresh payroll screen if visible
+                    self.payroll_screen.load_periods()
+                else:
+                    QMessageBox.warning(self, "Erreur", "Cette période existe déjà.")
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur", f"Erreur lors de la création: {str(e)}")
 
     def import_csv(self):
         """Import data from CSV"""
-        QMessageBox.information(self, "Importer CSV", "Cette fonctionnalité sera disponible prochainement.")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Importer un fichier CSV",
+            "",
+            "Fichiers CSV (*.csv);;Tous les fichiers (*)"
+        )
+
+        if file_path:
+            try:
+                import pandas as pd
+                from database.repositories.employee_repository import EmployeeRepository
+
+                df = pd.read_csv(file_path)
+
+                # Show preview and confirmation
+                preview = f"Fichier: {os.path.basename(file_path)}\n"
+                preview += f"Lignes: {len(df)}\n"
+                preview += f"Colonnes: {', '.join(df.columns[:5])}..."
+
+                reply = QMessageBox.question(
+                    self, "Confirmer l'import",
+                    f"{preview}\n\nVoulez-vous importer ces données?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+
+                if reply == QMessageBox.StandardButton.Yes:
+                    # Basic import logic - adjust based on CSV structure
+                    imported = 0
+                    for _, row in df.iterrows():
+                        try:
+                            # Attempt to import as employee
+                            EmployeeRepository.create_employee(row.to_dict())
+                            imported += 1
+                        except Exception:
+                            continue
+
+                    QMessageBox.information(
+                        self, "Import terminé",
+                        f"{imported} enregistrements importés avec succès."
+                    )
+                    self.employees_screen.load_employees()
+
+            except Exception as e:
+                QMessageBox.critical(self, "Erreur d'import", f"Erreur: {str(e)}")
 
     def export_data(self):
-        """Export data"""
-        QMessageBox.information(self, "Exporter", "Cette fonctionnalité sera disponible prochainement.")
+        """Export data to Excel"""
+        from reports.excel_exporter import ExcelExporter
+        from database.repositories.employee_repository import EmployeeRepository
+        from database.repositories.payroll_repository import PayrollRepository
+
+        # Ask what to export
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Exporter les données")
+        dialog.setMinimumWidth(350)
+
+        layout = QVBoxLayout(dialog)
+
+        export_combo = QComboBox()
+        export_combo.addItem("Liste des employés", "employees")
+        export_combo.addItem("Données de paie (période actuelle)", "payroll")
+        export_combo.addItem("Toutes les données de paie", "all_payroll")
+        layout.addWidget(QLabel("Que voulez-vous exporter?"))
+        layout.addWidget(export_combo)
+
+        button_box = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        button_box.accepted.connect(dialog.accept)
+        button_box.rejected.connect(dialog.reject)
+        layout.addWidget(button_box)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            export_type = export_combo.currentData()
+
+            # Get save location
+            default_name = f"PAIERO_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            file_path, _ = QFileDialog.getSaveFileName(
+                self,
+                "Enregistrer l'export",
+                os.path.join(REPORTS_DIR, default_name),
+                "Fichiers Excel (*.xlsx)"
+            )
+
+            if file_path:
+                try:
+                    if export_type == "employees":
+                        employees = EmployeeRepository.get_all()
+                        # Convert Employee objects to dictionaries
+                        employees_data = [
+                            {
+                                'employee_id': emp.employee_id,
+                                'last_name': emp.last_name,
+                                'first_name': emp.first_name,
+                                'position': emp.position,
+                                'category': emp.category,
+                                'status_code': emp.status_code,
+                                'hire_date': emp.hire_date,
+                                'agency_code': emp.agency_code,
+                                'department_code': emp.department_code,
+                                'inps_number': emp.inps_number,
+                                'bank_name': emp.bank_name,
+                                'account_number': emp.account_number
+                            }
+                            for emp in employees
+                        ]
+                        ExcelExporter.export_employee_list(employees_data, file_path)
+                    elif export_type in ["payroll", "all_payroll"]:
+                        periods = PayrollRepository.get_all_periods()
+                        if periods:
+                            records = PayrollRepository.get_records_by_period(periods[0]['period_id'])
+                            ExcelExporter.export_payroll_period(records, periods[0], file_path)
+
+                    QMessageBox.information(
+                        self, "Export réussi",
+                        f"Données exportées vers:\n{file_path}"
+                    )
+
+                    # Open the file location
+                    if os.path.exists(file_path):
+                        os.startfile(os.path.dirname(file_path)) if os.name == 'nt' else os.system(f'open "{os.path.dirname(file_path)}"')
+
+                except Exception as e:
+                    QMessageBox.critical(self, "Erreur d'export", f"Erreur: {str(e)}")
 
     def backup_database(self):
         """Backup database"""
-        QMessageBox.information(self, "Sauvegarde", "Cette fonctionnalité sera disponible prochainement.")
+        from database.connection import DatabaseConnection
+
+        # Create backup filename with timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"paiero_backup_{timestamp}.db"
+
+        # Ask for save location
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Sauvegarder la base de données",
+            os.path.join(BACKUP_DIR, default_name),
+            "Fichiers de base de données (*.db)"
+        )
+
+        if file_path:
+            try:
+                DatabaseConnection.backup_database(file_path)
+                QMessageBox.information(
+                    self, "Sauvegarde réussie",
+                    f"Base de données sauvegardée vers:\n{file_path}"
+                )
+            except Exception as e:
+                QMessageBox.critical(
+                    self, "Erreur de sauvegarde",
+                    f"Erreur lors de la sauvegarde: {str(e)}"
+                )
+
+    def generate_salary_slip(self):
+        """Generate salary slip for an employee"""
+        # Switch to reports screen and let user generate from there
+        self.show_reports()
+        QMessageBox.information(
+            self,
+            "Bulletin de Salaire",
+            "Utilisez l'écran Rapports pour générer des bulletins de salaire.\n\n"
+            "Vous pouvez sélectionner une période et un employé spécifique."
+        )
+
+    def generate_payroll_summary(self):
+        """Generate payroll summary report"""
+        # Switch to reports screen and let user generate from there
+        self.show_reports()
+        QMessageBox.information(
+            self,
+            "Résumé de Paie",
+            "Utilisez l'écran Rapports pour générer des résumés de paie.\n\n"
+            "Vous pouvez sélectionner une période et le type de rapport souhaité."
+        )
 
     def show_about(self):
         """Show about dialog"""
