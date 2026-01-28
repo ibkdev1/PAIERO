@@ -101,6 +101,15 @@ class DatabaseConnection:
         """Run database migrations to add any missing columns"""
         cursor = self._connection.cursor()
 
+        # Create migration tracking table if it doesn't exist
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS migration_log (
+                migration_id TEXT PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                status TEXT
+            )
+        """)
+
         # Migration 1: Add 'notes' column to loans_advances if it doesn't exist
         cursor.execute("PRAGMA table_info(loans_advances)")
         columns = [col[1] for col in cursor.fetchall()]
@@ -113,72 +122,148 @@ class DatabaseConnection:
                 print(f"Migration warning: {e}")
 
         # Migration 2: Fix loan_payments.period_id to allow NULL
-        # Check if period_id has NOT NULL constraint
-        cursor.execute("PRAGMA table_info(loan_payments)")
-        columns = cursor.fetchall()
+        # Check if this migration has already been applied
+        migration_id = 'fix_loan_payments_period_id_nullable_v1'
+        cursor.execute("SELECT migration_id FROM migration_log WHERE migration_id = ?", (migration_id,))
+        already_applied = cursor.fetchone() is not None
 
-        period_id_not_null = False
-        for col in columns:
-            if col[1] == 'period_id' and col[3] == 1:  # col[3] is notnull flag
-                period_id_not_null = True
-                break
+        if already_applied:
+            # Migration already applied, skip
+            pass
+        else:
+            # Check if period_id has NOT NULL constraint
+            cursor.execute("PRAGMA table_info(loan_payments)")
+            columns = cursor.fetchall()
 
-        if period_id_not_null:
-            # Need to recreate table with nullable period_id
-            try:
-                print("Migration: Fixing loan_payments.period_id constraint...")
+            period_id_not_null = False
+            for col in columns:
+                if col[1] == 'period_id' and col[3] == 1:  # col[3] is notnull flag
+                    period_id_not_null = True
+                    break
 
-                # Create new table with correct schema
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS loan_payments_new (
-                        payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        loan_id INTEGER NOT NULL,
-                        period_id INTEGER,
-                        payment_date DATE NOT NULL,
-                        scheduled_amount REAL NOT NULL,
-                        actual_amount REAL DEFAULT 0,
-                        is_paid BOOLEAN DEFAULT 0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (loan_id) REFERENCES loans_advances(loan_id),
-                        FOREIGN KEY (period_id) REFERENCES payroll_periods(period_id)
-                    )
-                """)
+            if period_id_not_null:
+                # Need to recreate table with nullable period_id
+                try:
+                    print("Migration: Fixing loan_payments.period_id constraint...")
 
-                # Copy existing data
-                cursor.execute("""
-                    INSERT INTO loan_payments_new
-                    SELECT * FROM loan_payments
-                """)
+                    # Create automatic backup before migration
+                    if self._database_path:
+                        import shutil
+                        from datetime import datetime
+                        from config import BACKUP_DIR
 
-                # Drop old table
-                cursor.execute("DROP TABLE loan_payments")
+                        # Ensure backup directory exists
+                        os.makedirs(BACKUP_DIR, exist_ok=True)
 
-                # Rename new table
-                cursor.execute("ALTER TABLE loan_payments_new RENAME TO loan_payments")
+                        # Create timestamped backup
+                        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                        backup_path = os.path.join(BACKUP_DIR, f'pre_migration_{timestamp}.db')
 
-                # Recreate indexes
-                cursor.execute("CREATE INDEX idx_payments_loan ON loan_payments(loan_id)")
-                cursor.execute("CREATE INDEX idx_payments_period ON loan_payments(period_id)")
-                cursor.execute("CREATE INDEX idx_payments_status ON loan_payments(is_paid)")
+                        try:
+                            shutil.copy2(self._database_path, backup_path)
+                            print(f"Migration: Backup created at {backup_path}")
+                        except Exception as backup_error:
+                            print(f"Migration warning: Could not create backup: {backup_error}")
+                            print("Migration will continue, but manual backup recommended")
 
-                # Recreate trigger
-                cursor.execute("""
-                    CREATE TRIGGER IF NOT EXISTS update_payments_timestamp
-                    AFTER UPDATE ON loan_payments
-                    FOR EACH ROW
-                    BEGIN
-                        UPDATE loan_payments SET updated_at = CURRENT_TIMESTAMP
-                        WHERE payment_id = NEW.payment_id;
-                    END
-                """)
+                    # Temporarily disable foreign keys for migration
+                    cursor.execute("PRAGMA foreign_keys = OFF")
 
-                self._connection.commit()
-                print("Migration: Successfully fixed loan_payments.period_id constraint")
-            except Exception as e:
-                self._connection.rollback()
-                print(f"Migration error (loan_payments): {e}")
-                print("You may need to manually fix the loan_payments table")
+                    # Create new table with correct schema
+                    cursor.execute("""
+                        CREATE TABLE IF NOT EXISTS loan_payments_new (
+                            payment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                            loan_id INTEGER NOT NULL,
+                            period_id INTEGER,
+                            payment_date DATE NOT NULL,
+                            scheduled_amount REAL NOT NULL,
+                            actual_amount REAL DEFAULT 0,
+                            is_paid BOOLEAN DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            FOREIGN KEY (loan_id) REFERENCES loans_advances(loan_id),
+                            FOREIGN KEY (period_id) REFERENCES payroll_periods(period_id)
+                        )
+                    """)
+
+                    # Copy existing data (explicitly list columns to handle schema differences)
+                    # Get columns from old table
+                    cursor.execute("PRAGMA table_info(loan_payments)")
+                    old_columns = [col[1] for col in cursor.fetchall()]
+
+                    # Build column list for insert (only common columns)
+                    common_columns = ', '.join(old_columns)
+
+                    cursor.execute(f"""
+                        INSERT INTO loan_payments_new ({common_columns})
+                        SELECT {common_columns} FROM loan_payments
+                    """)
+
+                    # Drop old table
+                    cursor.execute("DROP TABLE loan_payments")
+
+                    # Rename new table
+                    cursor.execute("ALTER TABLE loan_payments_new RENAME TO loan_payments")
+
+                    # Recreate indexes
+                    cursor.execute("CREATE INDEX idx_payments_loan ON loan_payments(loan_id)")
+                    cursor.execute("CREATE INDEX idx_payments_period ON loan_payments(period_id)")
+                    cursor.execute("CREATE INDEX idx_payments_status ON loan_payments(is_paid)")
+
+                    # Recreate trigger
+                    cursor.execute("""
+                        CREATE TRIGGER IF NOT EXISTS update_payments_timestamp
+                        AFTER UPDATE ON loan_payments
+                        FOR EACH ROW
+                        BEGIN
+                            UPDATE loan_payments SET updated_at = CURRENT_TIMESTAMP
+                            WHERE payment_id = NEW.payment_id;
+                        END
+                    """)
+
+                    # Log successful migration
+                    cursor.execute("""
+                        INSERT INTO migration_log (migration_id, status)
+                        VALUES (?, 'success')
+                    """, (migration_id,))
+
+                    # Commit the migration
+                    self._connection.commit()
+
+                    # Re-enable foreign keys (must be done AFTER commit, outside transaction)
+                    self._connection.execute("PRAGMA foreign_keys = ON")
+
+                    print("Migration: Successfully fixed loan_payments.period_id constraint")
+                except Exception as e:
+                    self._connection.rollback()
+                    # Re-enable foreign keys even on failure
+                    try:
+                        self._connection.execute("PRAGMA foreign_keys = ON")
+                    except:
+                        pass
+                    # Log failed migration
+                    try:
+                        cursor.execute("""
+                            INSERT INTO migration_log (migration_id, status)
+                            VALUES (?, 'failed')
+                        """, (migration_id,))
+                        self._connection.commit()
+                    except:
+                        pass
+                    print(f"Migration error (loan_payments): {e}")
+                    print("You may need to manually fix the loan_payments table")
+                    import traceback
+                    traceback.print_exc()
+            else:
+                # period_id already allows NULL, mark migration as already complete
+                try:
+                    cursor.execute("""
+                        INSERT OR IGNORE INTO migration_log (migration_id, status)
+                        VALUES (?, 'skipped_already_correct')
+                    """, (migration_id,))
+                    self._connection.commit()
+                except:
+                    pass
 
     @classmethod
     def get_connection(cls) -> sqlite3.Connection:

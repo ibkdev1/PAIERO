@@ -13,17 +13,30 @@ The database was created with an older version of the schema where the `loan_pay
 
 There are **two ways** to fix this:
 
-### Option 1: Automatic Fix (Recommended)
-The fix is now included in the application. Simply:
+### Option 1: Automatic Fix (Recommended) ✅ PRODUCTION READY
+The fix is now included in the application with full production safety features:
 
+**Safety Features:**
+- ✅ Automatic backup before migration
+- ✅ Migration tracking (won't re-run)
+- ✅ Rollback on errors
+- ✅ Detailed error logging
+
+**Steps:**
 1. **Update your PAIERO installation** with the latest code
 2. **Launch PAIERO** - the migration will run automatically on startup
-3. Watch the console for this message:
+3. Watch the console for these messages:
    ```
    Migration: Fixing loan_payments.period_id constraint...
+   Migration: Backup created at ~/Library/Application Support/PAIERO/backups/pre_migration_YYYYMMDD_HHMMSS.db
    Migration: Successfully fixed loan_payments.period_id constraint
    ```
 4. **Try creating a loan again** - it should work now!
+
+**Backup Location:**
+- macOS: `~/Library/Application Support/PAIERO/backups/`
+- Windows: `%LOCALAPPDATA%\PAIERO\backups\`
+- Linux: `~/.local/share/PAIERO/backups/`
 
 ### Option 2: Manual Fix (If automatic doesn't work)
 
